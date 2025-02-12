@@ -21,6 +21,6 @@ RUN set -eu && \
     nvm install 13.6.0 && \
     npm install -g pm2
 
-RUN /usr/local/bin/python -m pip install --upgrade pip && /usr/local/bin/python -m pip install poetry
+RUN /usr/local/bin/python -m pip install --upgrade pip && /usr/local/bin/python -m pip install poetry==1.8.5
 
 ENTRYPOINT ["/bin/bash", "-l", "-c", "setup.sh"]
