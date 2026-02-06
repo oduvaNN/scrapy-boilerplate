@@ -93,9 +93,7 @@ class Consumer(ScrapyCommand):
         if queue_name is None:
             queue_name = self.queue_name
         if queue_name is None:
-            raise NotImplementedError(
-                "queue name must be provided with options or override this method to return it"
-            )
+            raise NotImplementedError("queue name must be provided with options or override this method to return it")
         self.queue_name = queue_name
         return queue_name
 
@@ -103,7 +101,7 @@ class Consumer(ScrapyCommand):
         mode = getattr(opts, "mode", None)
         if mode == self.CommandModes.ACTION.value:
             self.prefetch_count = 1
-        thread_pool = reactor.getThreadPool()
+        thread_pool = reactor.getThreadPool()  # type: ignore[attr-defined]
         if thread_pool and hasattr(thread_pool, "max"):
             self.prefetch_count = int(thread_pool.max - (thread_pool.max % 4))
         if opts.prefetch_count is not None and opts.prefetch_count > 0:
@@ -144,7 +142,7 @@ class Consumer(ScrapyCommand):
             ),
             heartbeat=RMQDefaultOptions.CONNECTION_HEARTBEAT.value,
         )
-        reactor.callInThread(self.connect, parameters, self.queue_name)
+        reactor.callInThread(self.connect, parameters, self.queue_name)  # type: ignore[attr-defined]
 
     def on_basic_get_message(self, message):
         delivery_tag = message.get("method").delivery_tag
@@ -153,17 +151,13 @@ class Consumer(ScrapyCommand):
             ack_cb = call_once(
                 functools.partial(
                     self.rmq_connection.connection.ioloop.add_callback_threadsafe,
-                    functools.partial(
-                        self.rmq_connection.acknowledge_message, delivery_tag=delivery_tag
-                    ),
+                    functools.partial(self.rmq_connection.acknowledge_message, delivery_tag=delivery_tag),
                 )
             )
             nack_cb = call_once(
                 functools.partial(
                     self.rmq_connection.connection.ioloop.add_callback_threadsafe,
-                    functools.partial(
-                        self.rmq_connection.negative_acknowledge_message, delivery_tag=delivery_tag
-                    ),
+                    functools.partial(self.rmq_connection.negative_acknowledge_message, delivery_tag=delivery_tag),
                 )
             )
 
@@ -171,10 +165,12 @@ class Consumer(ScrapyCommand):
 
         d = self.db_connection_pool.runInteraction(self.process_message, message_body)
         d.addCallback(
-            self.on_message_processed, ack_callback=ack_cb, nack_callback=nack_cb,
-        ).addErrback(self.on_message_process_failure, nack_callback=nack_cb).addBoth(
-            self._check_mode
-        )
+            self.on_message_processed,
+            ack_callback=ack_cb,
+            nack_callback=nack_cb,
+        ).addErrback(
+            self.on_message_process_failure, nack_callback=nack_cb
+        ).addBoth(self._check_mode)
 
         self._can_get_next_message = True
 
@@ -231,17 +227,15 @@ class Consumer(ScrapyCommand):
             nack_callback()
         if failure.check(NotImplementedError):
             self.logger.critical("Required method is not implemented. Shutting down...")
-            reactor.callLater(0, self.crawler_process._graceful_stop_reactor)
+            reactor.callLater(0, self.crawler_process._graceful_stop_reactor)  # type: ignore[attr-defined]
         if failure.check(OperationalError):
             if "1065" in failure.getErrorMessage():
-                self.logger.critical(
-                    "Got empty query to DB. Incorrect implementation. Shutting down..."
-                )
-                reactor.callLater(0, self.crawler_process._graceful_stop_reactor)
+                self.logger.critical("Got empty query to DB. Incorrect implementation. Shutting down...")
+                reactor.callLater(0, self.crawler_process._graceful_stop_reactor)  # type: ignore[attr-defined]
 
     def _check_mode(self, arg):
         if self.mode == Consumer.CommandModes.ACTION.value:
-            reactor.callLater(0, self.crawler_process._graceful_stop_reactor)
+            reactor.callLater(0, self.crawler_process._graceful_stop_reactor)  # type: ignore[attr-defined]
         return arg
 
     def on_message_consumed(self, message):
@@ -275,5 +269,5 @@ class Consumer(ScrapyCommand):
 
     def run(self, args: list[str], opts: Namespace):
         self.set_logger(self.__class__.__name__, self.project_settings.get("LOG_LEVEL"))
-        reactor.callLater(0, self.execute, args, opts)
-        reactor.run()
+        reactor.callLater(0, self.execute, args, opts)  # type: ignore[attr-defined]
+        reactor.run()  # type: ignore[attr-defined]
