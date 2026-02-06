@@ -88,12 +88,27 @@ class Task:
     def is_items_completed(self, ignore_zero=True):
         if ignore_zero is True and self.scheduled_items == 0:
             return False
-        return self.scheduled_items == (self.scraped_items + self.dropped_items + self.error_items)
+        return self.scheduled_items == (
+            self.scraped_items + self.dropped_items + self.error_items
+        )
 
     def is_requests_completed(self, ignore_zero=True):
         if ignore_zero is True and self.scheduled_requests == 0:
             return False
-        return self.scheduled_requests == (self.success_responses + self.failed_responses)
+        return self.scheduled_requests == (
+            self.success_responses + self.failed_responses
+        )
+
+    def get_reply_payload(self):
+        return {
+            "status": self.status,
+            "exception": self.exception,
+        }
+
+    def has_pending_items(self):
+        return self.scheduled_items > (
+            self.scraped_items + self.dropped_items + self.error_items
+        )
 
     def __repr__(self):
         return json.dumps(
