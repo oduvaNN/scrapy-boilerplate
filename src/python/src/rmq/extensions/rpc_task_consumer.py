@@ -234,74 +234,69 @@ class RPCTaskConsumer(object):
                 self._check_is_completed(spider, delivery_tag)
 
     def _check_is_completed(self, spider=None, delivery_tag=None):
-        if spider is None:
-            spider = self.__spider
-        if delivery_tag is not None and spider is not None:
-            current_task: Task = spider.processing_tasks.get_task(delivery_tag)
-            if not current_task and self.completion_strategy is RPCTaskConsumer.CompletionStrategies.WEAK_ITEMS_BASED:
-                return
-            is_completed = False
-            if self.completion_strategy == RPCTaskConsumer.CompletionStrategies.REQUESTS_BASED:
-                is_completed = current_task.is_requests_completed() and not current_task.has_pending_items()
+        spider = spider or self.__spider
+        if not spider or not delivery_tag:
+            return
 
-                if is_completed:
-                    if current_task.status != TaskStatusCodes.ERROR:
-                        if (
-                            current_task.success_responses == 0
-                            and current_task.scheduled_requests > 0
-                            and current_task.scheduled_requests == current_task.failed_responses
-                        ):
-                            current_task.status = TaskStatusCodes.HARDWARE_ERROR
-                        elif current_task.scheduled_requests > 0 and current_task.failed_responses == 0:
-                            current_task.status = TaskStatusCodes.SUCCESS
-                        else:
-                            current_task.status = TaskStatusCodes.PARTIAL_SUCCESS
-            elif self.completion_strategy in [
-                RPCTaskConsumer.CompletionStrategies.STRONG_ITEMS_BASED,
-                RPCTaskConsumer.CompletionStrategies.WEAK_ITEMS_BASED,
-            ]:
-                if self.completion_strategy == RPCTaskConsumer.CompletionStrategies.WEAK_ITEMS_BASED:
-                    is_completed = current_task.is_items_completed()
-                if self.completion_strategy == RPCTaskConsumer.CompletionStrategies.STRONG_ITEMS_BASED:
-                    is_completed = current_task.is_items_completed() and current_task.is_requests_completed()
-                if is_completed:
-                    if current_task.status != TaskStatusCodes.ERROR:
-                        if (
-                            current_task.scraped_items == 0
-                            and current_task.scheduled_items > 0
-                            and current_task.scheduled_items == current_task.error_items
-                        ):
-                            current_task.status = TaskStatusCodes.HARDWARE_ERROR
-                        elif (
-                            current_task.scheduled_items > 0
-                            and (current_task.error_items + current_task.dropped_items) == 0
-                        ):
-                            current_task.status = TaskStatusCodes.SUCCESS
-                        else:
-                            current_task.status = TaskStatusCodes.PARTIAL_SUCCESS
-            if is_completed:
-                if current_task.reply_to is not None:
-                    payload = {**deepcopy(current_task.payload), **current_task.get_reply_payload()}
-                    if isinstance(self.rmq_connection.connection, pika.SelectConnection):
-                        cb = functools.partial(
-                            self.rmq_connection.publish_message,
-                            message=json.dumps(payload),
-                            queue_name=current_task.reply_to,
-                        )
-                    self.rmq_connection.connection.ioloop.add_callback_threadsafe(cb)
+        current_task: Task = spider.processing_tasks.get_task(delivery_tag)
+        if not current_task:
+            return
 
-                if self._can_interact and self.__spider is not None:
-                    if hasattr(self.__spider, "rmq_test_mode") and self.__spider.rmq_test_mode is True:
-                        logger.critical("TASK MUST BE ACKED HERE " * 4)
-                    else:
-                        current_task.ack()
-                else:
-                    # Note: possible deprecated to store delivery tags internally and LoopingCall: _relieve is redundant
-                    if delivery_tag not in self.pending_relieve["ack"]:
-                        self.pending_relieve["ack"].append(delivery_tag)
+        # Check if task is fully ready (all requests finished AND all items processed)
+        is_completed = current_task.is_requests_completed() and not current_task.has_pending_items()
 
-                if hasattr(spider, "processing_tasks") and isinstance(spider.processing_tasks, TaskObserver):
-                    spider.processing_tasks.remove_task(delivery_tag)
+        if not is_completed:
+            return
+
+        self._update_task_completion_status(current_task)
+        self._send_task_completion_reply(current_task)
+        self._ack_task(current_task, spider, delivery_tag)
+
+        if hasattr(spider, "processing_tasks") and isinstance(spider.processing_tasks, TaskObserver):
+            spider.processing_tasks.remove_task(delivery_tag)
+
+    def _update_task_completion_status(self, task: Task):
+        """Determine final status based on request statistics."""
+        if task.status == TaskStatusCodes.ERROR:
+            return
+
+        if (
+            task.success_responses == 0
+            and task.scheduled_requests > 0
+            and task.scheduled_requests == task.failed_responses
+        ):
+            task.status = TaskStatusCodes.HARDWARE_ERROR
+        elif task.scheduled_requests > 0 and task.failed_responses == 0:
+            task.status = TaskStatusCodes.SUCCESS
+        else:
+            task.status = TaskStatusCodes.PARTIAL_SUCCESS
+
+    def _send_task_completion_reply(self, task: Task):
+        """Send reply message to RabbitMQ if reply_to is set."""
+        if task.reply_to is None:
+            return
+
+        payload = {**deepcopy(task.payload), **task.get_reply_payload()}
+
+        if isinstance(self.rmq_connection.connection, pika.SelectConnection):
+            cb = functools.partial(
+                self.rmq_connection.publish_message,
+                message=json.dumps(payload),
+                queue_name=task.reply_to,
+            )
+            self.rmq_connection.connection.ioloop.add_callback_threadsafe(cb)
+
+    def _ack_task(self, task: Task, spider, delivery_tag):
+        """Acknowledge task or add to pending buffer if connection is not ready."""
+        if self._can_interact and self.__spider is not None:
+            if hasattr(self.__spider, "rmq_test_mode") and self.__spider.rmq_test_mode is True:
+                logger.critical("TASK MUST BE ACKED HERE " * 4)
+            else:
+                task.ack()
+        else:
+            # Note: possible deprecated to store delivery tags internally and LoopingCall: _relieve is redundant
+            if delivery_tag not in self.pending_relieve["ack"]:
+                self.pending_relieve["ack"].append(delivery_tag)
 
     def _validate_spider_has_attributes(self):
         spider_attributes = [attr for attr in dir(self.__spider) if not callable(getattr(self.__spider, attr))]
@@ -330,8 +325,6 @@ class RPCTaskConsumer(object):
                         callback_decorated_funcs_count += 1
                     if decorator_name == rmq_errback.__name__:
                         errback_decorated_funcs_count += 1
-        logger.debug(f"callback_decorated_funcs_count: {callback_decorated_funcs_count}")
-        logger.debug(f"errback_decorated_funcs_count: {errback_decorated_funcs_count}")
         if callback_decorated_funcs_count == 0 or errback_decorated_funcs_count == 0:
             return False
         return True
@@ -399,11 +392,11 @@ class RPCTaskConsumer(object):
         rmq_task: Task = self.__spider.task_type(message, ack_cb, nack_cb)
         self.__spider.processing_tasks.add_task(rmq_task)
         # logger.debug(message["body"])
-        # logger.critical(message)
+        # logger.critical(message)spider.next_request
         self._can_get_next_message = True
         spider_next_request = getattr(self.__spider, "next_request", None)
         if callable(spider_next_request):
-            prepared_request = self.__spider.next_request(delivery_tag, message.get("body"))
+            prepared_request = self.__spider.next_request(delivery_tag, message.get("body")) 
             if isinstance(prepared_request, scrapy.Request):
                 prepared_request_meta = deepcopy(prepared_request.meta)
                 should_replace_meta = False
