@@ -396,7 +396,7 @@ class RPCTaskConsumer(object):
         self._can_get_next_message = True
         spider_next_request = getattr(self.__spider, "next_request", None)
         if callable(spider_next_request):
-            prepared_request = self.__spider.next_request(delivery_tag, message.get("body")) 
+            prepared_request = self.__spider.next_request(delivery_tag, message.get("body"))
             if isinstance(prepared_request, scrapy.Request):
                 prepared_request_meta = deepcopy(prepared_request.meta)
                 should_replace_meta = False

@@ -23,12 +23,10 @@ class HttpProxyMiddleware:
             proxy_auth = self.crawler.settings.get("PROXY_AUTH")
 
             if not proxy:
-                raise Exception('Proxy enabled but not configured')
+                raise Exception("Proxy enabled but not configured")
 
             if proxy_auth:
-                request.headers["Proxy-Authorization"] = basic_auth_header(
-                    *proxy_auth.split(":")
-                )
+                request.headers["Proxy-Authorization"] = basic_auth_header(*proxy_auth.split(":"))
             if "http" not in proxy:
                 proxy = "http://{}".format(proxy)
             request.meta["proxy"] = proxy
@@ -38,13 +36,9 @@ class HttpProxyMiddleware:
         if not spider:
             spider = self.crawler.spider
 
-        if (
-            hasattr(spider, "proxy_enabled")
-            and spider.proxy_enabled
-            or self.crawler.settings.get("PROXY_ENABLED")
-        ):
+        if hasattr(spider, "proxy_enabled") and spider.proxy_enabled or self.crawler.settings.get("PROXY_ENABLED"):
             request = self.update_request(request, spider)
         else:
             if self.logging_enabled:
-                spider.logger.warning('PROXY DISABLED')
+                spider.logger.warning("PROXY DISABLED")
                 self.logging_enabled = False
