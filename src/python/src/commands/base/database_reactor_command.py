@@ -28,17 +28,13 @@ class DatabaseReactorCommand(BaseReactorCommand, ABC):
         )
 
     def execute(self, args: list, opts: list) -> Deferred:
-        query: Deferred = self.db_connection_pool.runInteraction(
-            self.process_message, {}
-        )
+        query: Deferred = self.db_connection_pool.runInteraction(self.process_message, {})
         return query
 
     def process_message(self, transaction: Transaction, message_body: Any):
         stmt = self.build_stmt(message_body)
         if isinstance(stmt, SQLAlchemyExecutable):
-            stmt_compiled = stmt.compile(
-                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
-            )
+            stmt_compiled = stmt.compile(dialect=mysql.dialect(), compile_kwargs={"literal_binds": True})
             transaction.execute(str(stmt_compiled))
         else:
             transaction.execute(stmt)

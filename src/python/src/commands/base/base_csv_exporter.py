@@ -43,16 +43,12 @@ class BaseCSVExporter(BaseCommand):
         d = self.db_connection_pool.runInteraction(self.get_data, self.chunk_size)
         d.addCallback(self.export).addErrback(self._on_data_export_error)
 
-    def get_data(
-        self, transaction: Transaction, chunk_size: int = None
-    ) -> Union[tuple, Dict]:
+    def get_data(self, transaction: Transaction, chunk_size: int = None) -> Union[tuple, Dict]:
         if chunk_size is None:
             chunk_size = self.chunk_size
         stmt = self.build_select_query_stmt(chunk_size)
         if isinstance(stmt, SQLAlchemyExecutable):
-            stmt_compiled = stmt.compile(
-                compile_kwargs={"literal_binds": True}, dialect=dialect()
-            )
+            stmt_compiled = stmt.compile(compile_kwargs={"literal_binds": True}, dialect=dialect())
             transaction.execute(str(stmt_compiled))
         if chunk_size == 1:
             return transaction.fetchone()
@@ -61,9 +57,7 @@ class BaseCSVExporter(BaseCommand):
     def export(self, rows: Union[tuple, Dict]) -> None:
         if not rows:
             if self.file_exists:
-                self.logger.debug(
-                    f"Export finished successfully to {path.basename(self.file_path)}."
-                )
+                self.logger.debug(f"Export finished successfully to {path.basename(self.file_path)}.")
             else:
                 self.logger.warning("Nothing found")
             reactor.stop()
@@ -77,12 +71,8 @@ class BaseCSVExporter(BaseCommand):
             self.save(rows)
             deferred_interactions = []
             for row in rows:
-                deferred_interactions.append(
-                    self.db_connection_pool.runInteraction(self.update, row)
-                )
-            deferred_list = defer.DeferredList(
-                deferred_interactions, consumeErrors=True
-            )
+                deferred_interactions.append(self.db_connection_pool.runInteraction(self.update, row))
+            deferred_list = defer.DeferredList(deferred_interactions, consumeErrors=True)
             deferred_list.addCallback(self._on_row_update_completed)
             deferred_list.addErrback(self._on_row_update_error)
 
@@ -111,17 +101,9 @@ class BaseCSVExporter(BaseCommand):
 
     def build_select_query_stmt(self, chunk_size: int) -> SQLAlchemyExecutable:
         if columns := self.specify_columns():
-            return (
-                select(*columns)
-                .limit(chunk_size)
-                .where(self.table.sent_to_customer == None)
-            )
+            return select(*columns).limit(chunk_size).where(self.table.sent_to_customer == None)
         else:
-            return (
-                select(self.table)
-                .limit(chunk_size)
-                .where(self.table.sent_to_customer == None)
-            )
+            return select(self.table).limit(chunk_size).where(self.table.sent_to_customer == None)
 
     def update(self, transaction: Transaction, row: Dict) -> None:
         stmt = self.build_update_query_stmt(row)
@@ -149,9 +131,7 @@ class BaseCSVExporter(BaseCommand):
                 if column := getattr(self.table, column_name, None):
                     columns.append(column)
                 else:
-                    raise ValueError(
-                        f'Column "{column_name}" is not found in the table.'
-                    )
+                    raise ValueError(f'Column "{column_name}" is not found in the table.')
             if self.table.__table__.columns.id not in columns:
                 columns.insert(0, self.table.__table__.columns.id)
             return columns
@@ -169,9 +149,7 @@ class BaseCSVExporter(BaseCommand):
         if not self.headers:
             self.headers = list(row.keys())
 
-    def get_file_path(
-        self, timestamp_format=None, prefix=None, postfix=None, extension=None
-    ):
+    def get_file_path(self, timestamp_format=None, prefix=None, postfix=None, extension=None):
         if timestamp_format is None:
             timestamp_format = self.file_timestamp_format
         if prefix is None:
