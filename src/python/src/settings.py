@@ -1,12 +1,27 @@
 # -*- coding: utf-8 -*-
+from scrapy.utils.reactor import install_reactor
 import logging
 import os
 from datetime import datetime, timedelta
-from distutils.util import strtobool
 from typing import Dict
 
 from dotenv import load_dotenv
 from scrapy.utils.log import configure_logging
+
+
+def strtobool(val: str) -> bool:
+    """Convert a string representation of truth to True or False.
+    True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values
+    are 'n', 'no', 'f', 'false', 'off', and '0'.
+    """
+    val = val.lower()
+    if val in ("y", "yes", "t", "true", "on", "1"):
+        return True
+    elif val in ("n", "no", "f", "false", "off", "0"):
+        return False
+    else:
+        raise ValueError(f"invalid truth value {val!r}")
+
 
 load_dotenv()
 
@@ -88,7 +103,12 @@ if IS_SENTRY_ENABLED:
     EXTENSIONS["scrapy_sentry_sdk.extensions.SentryLogging"] = 1
 
 configure_logging()
-if datetime(*[int(number) for number in USER_AGENT_RELEASE_DATE.split('-')]) + timedelta(days=180) < datetime.now():
-    logging.warning('USER_AGENT is outdated')
+if (
+    datetime.strptime(USER_AGENT_RELEASE_DATE, "%Y-%m-%d") + timedelta(days=180)
+    < datetime.now()
+):
+    logging.warning("USER_AGENT is outdated")
 
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
+TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
+install_reactor(TWISTED_REACTOR)

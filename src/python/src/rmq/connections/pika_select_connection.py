@@ -5,7 +5,7 @@ from typing import List
 
 import pika
 from pika.exceptions import ChannelWrongStateError, ConnectionWrongStateError
-from twisted.internet import reactor, threads
+from twisted.internet import reactor
 
 from rmq.utils.decorators import log_current_thread
 
@@ -40,7 +40,9 @@ class PikaSelectConnection:
 
         # additional options
         self.options = (
-            options if options is not None and isinstance(options, dict) else self._DEFAULT_OPTIONS
+            options
+            if options is not None and isinstance(options, dict)
+            else self._DEFAULT_OPTIONS
         )
 
         # is current connection should start consuming on ioloop run state
@@ -143,7 +145,9 @@ class PikaSelectConnection:
         logger.warning(
             f"Connection open failed, reopening in {self._RECONNECT_TIMEOUT} seconds: {reason}"
         )
-        self.connection.ioloop.call_later(self._RECONNECT_TIMEOUT, self.connection.ioloop.stop)
+        self.connection.ioloop.call_later(
+            self._RECONNECT_TIMEOUT, self.connection.ioloop.stop
+        )
 
     def on_connection_closed(self, _unused_connection, reason):
         self._channel = None
@@ -204,7 +208,8 @@ class PikaSelectConnection:
     def start_interacting(self, _unused_frame):
         logger.info("Issuing consumer related RPC commands")
         if self.options.get(
-            "enable_delivery_confirmations", self._DEFAULT_OPTIONS["enable_delivery_confirmations"]
+            "enable_delivery_confirmations",
+            self._DEFAULT_OPTIONS["enable_delivery_confirmations"],
         ):
             self.enable_delivery_confirmations()
         self.can_interact = True
@@ -212,11 +217,15 @@ class PikaSelectConnection:
 
         if self.is_consumer is True:
             self._channel.add_on_cancel_callback(self.on_consumer_cancelled)
-            self._consumer_tag = self._channel.basic_consume(self.queue_name, self.on_message)
+            self._consumer_tag = self._channel.basic_consume(
+                self.queue_name, self.on_message
+            )
             self._consuming = True
 
     def on_consumer_cancelled(self, method_frame):
-        logger.info("Consumer was cancelled remotely, reopen consumer: {}".format(method_frame))
+        logger.info(
+            "Consumer was cancelled remotely, reopen consumer: {}".format(method_frame)
+        )
         if (
             self.is_consumer
             and method_frame.channel_number == self._channel.channel_number
@@ -247,7 +256,9 @@ class PikaSelectConnection:
     def on_cancel_ok(self, _unused_frame, consumer_tag):
         if consumer_tag:
             logger.info(
-                "RabbitMQ acknowledged the cancellation of the consumer: {}".format(consumer_tag)
+                "RabbitMQ acknowledged the cancellation of the consumer: {}".format(
+                    consumer_tag
+                )
             )
         self._consuming = False
         self.stop()
@@ -280,7 +291,9 @@ class PikaSelectConnection:
         cb = functools.partial(
             self._exec_get_ready_messages_count_issuer_callback, callback=callback
         )
-        self._channel.queue_declare(queue=queue_name, callback=cb, durable=True, passive=True)
+        self._channel.queue_declare(
+            queue=queue_name, callback=cb, durable=True, passive=True
+        )
 
     def _exec_get_ready_messages_count_issuer_callback(self, frame, callback):
         message_count = frame.method.message_count
@@ -288,14 +301,19 @@ class PikaSelectConnection:
             callback(message_count=message_count)
 
     def publish_message(
-        self, message, queue_name: str = None, properties: pika.BasicProperties = None
+        self,
+        message,
+        queue_name: str | None = None,
+        properties: pika.BasicProperties = None,
     ):
         if self._channel is None or not self._channel.is_open:
             return
         if queue_name is None:
             queue_name = self.queue_name
         if properties is None:
-            properties = pika.BasicProperties(content_type="application/json", delivery_mode=2)
+            properties = pika.BasicProperties(
+                content_type="application/json", delivery_mode=2
+            )
 
         if queue_name == self.queue_name:
             self._channel.basic_publish("", queue_name, message, properties)
@@ -320,24 +338,40 @@ class PikaSelectConnection:
     def get_message(self):
         if self._channel is None or not self._channel.is_open:
             return None
-        self._channel.basic_get(self.queue_name, self.on_basic_get_message, auto_ack=False)
+        self._channel.basic_get(
+            self.queue_name, self.on_basic_get_message, auto_ack=False
+        )
 
     def on_basic_get_message(self, channel, method, properties, body):
-        msg_object = {"channel": channel, "method": method, "properties": properties, "body": body}
+        msg_object = {
+            "channel": channel,
+            "method": method,
+            "properties": properties,
+            "body": body,
+        }
         self.__owner_call_on_basic_get_msg_handler(msg_object)
 
     def on_basic_get_empty(self, _method):
         logger.debug(
-            "empty queue allow try again consuming in {} seconds".format(self._EMPTY_QUEUE_DELAY)
+            "empty queue allow try again consuming in {} seconds".format(
+                self._EMPTY_QUEUE_DELAY
+            )
         )
-        self.connection.ioloop.call_later(self._EMPTY_QUEUE_DELAY, self.bubble_on_basic_get_empty)
+        self.connection.ioloop.call_later(
+            self._EMPTY_QUEUE_DELAY, self.bubble_on_basic_get_empty
+        )
 
     def bubble_on_basic_get_empty(self):
         self.__owner_call_on_basic_get_empty_handler()
 
     @log_current_thread
     def on_message(self, channel, method, properties, body):
-        msg_object = {"channel": channel, "method": method, "properties": properties, "body": body}
+        msg_object = {
+            "channel": channel,
+            "method": method,
+            "properties": properties,
+            "body": body,
+        }
         self.__owner_call_on_msg_consumed_handler(msg_object)
 
     @log_current_thread
@@ -384,7 +418,8 @@ class PikaSelectConnection:
                 self.shutdown_event_handler = None
             if reactor.running:
                 cb = functools.partial(
-                    self.connection.ioloop.add_callback_threadsafe, self.stop_from_reactor_event
+                    self.connection.ioloop.add_callback_threadsafe,
+                    self.stop_from_reactor_event,
                 )
                 self.shutdown_event_handler = reactor.addSystemEventTrigger(
                     "before", "shutdown", cb
@@ -396,12 +431,17 @@ class PikaSelectConnection:
     def stop_from_reactor_event(self):
         logger.debug("stop called from reactor event")
         if self.options.get(
-            "enable_delivery_confirmations", self._DEFAULT_OPTIONS["enable_delivery_confirmations"]
+            "enable_delivery_confirmations",
+            self._DEFAULT_OPTIONS["enable_delivery_confirmations"],
         ) and len(self._deliveries):
             self._current_graceful_stop_attempts_count += 1
-            if self._current_graceful_stop_attempts_count < self._MAX_GRACEFUL_STOP_ATTEMPTS:
+            if (
+                self._current_graceful_stop_attempts_count
+                < self._MAX_GRACEFUL_STOP_ATTEMPTS
+            ):
                 self.connection.ioloop.call_later(
-                    self._CHECK_DELIVERY_CONFIRMATION_DELAY, self.stop_from_reactor_event
+                    self._CHECK_DELIVERY_CONFIRMATION_DELAY,
+                    self.stop_from_reactor_event,
                 )
             else:
                 self.stop()

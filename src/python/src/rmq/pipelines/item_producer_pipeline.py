@@ -42,7 +42,7 @@ class ItemProducerPipeline:
         self.rmq_connection = None
         self._can_interact = False
 
-        self.pending_items_buffer = []
+        self.pending_items_buffer: list[RMQItem] = []
 
     def spider_opened(self, spider):
         """Check spider for correct declared callbacks/errbacks/methods/variables"""
@@ -53,7 +53,9 @@ class ItemProducerPipeline:
 
         """Configure loggers"""
         logger.setLevel(self.spider.settings.get("LOG_LEVEL", "INFO"))
-        logging.getLogger("pika").setLevel(self.spider.settings.get("PIKA_LOG_LEVEL", "WARNING"))
+        logging.getLogger("pika").setLevel(
+            self.spider.settings.get("PIKA_LOG_LEVEL", "WARNING")
+        )
 
         """Declare/retrieve queue name from spider instance"""
         result_queue_name = spider.result_queue_name
@@ -86,7 +88,9 @@ class ItemProducerPipeline:
 
     def _validate_spider_has_attributes(self):
         spider_attributes = [
-            attr for attr in dir(self.spider) if not callable(getattr(self.spider, attr))
+            attr
+            for attr in dir(self.spider)
+            if not callable(getattr(self.spider, attr))
         ]
         if "result_queue_name" not in spider_attributes:
             return False
@@ -131,11 +135,12 @@ class ItemProducerPipeline:
             if self.delivery_tag_meta_key in item_as_dictionary:
                 del item_as_dictionary[self.delivery_tag_meta_key]
             cb = functools.partial(
-                self.rmq_connection.publish_message, message=json.dumps(item_as_dictionary)
+                self.rmq_connection.publish_message,
+                message=json.dumps(item_as_dictionary),
             )
             self.rmq_connection.connection.ioloop.add_callback_threadsafe(cb)
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider=None):
         """Invoked when item is processed"""
         if isinstance(item, RMQItem):
             if self._can_interact:

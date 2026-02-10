@@ -28,7 +28,9 @@ class DatabaseReactorCommand(BaseReactorCommand, ABC):
         )
 
     def execute(self, args: list, opts: list) -> Deferred:
-        query: Deferred = self.db_connection_pool.runInteraction(self.process_message, {})
+        query: Deferred = self.db_connection_pool.runInteraction(
+            self.process_message, {}
+        )
         return query
 
     def process_message(self, transaction: Transaction, message_body: Any):
