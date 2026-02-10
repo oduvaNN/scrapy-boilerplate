@@ -392,7 +392,7 @@ class RPCTaskConsumer(object):
         rmq_task: Task = self.__spider.task_type(message, ack_cb, nack_cb)
         self.__spider.processing_tasks.add_task(rmq_task)
         # logger.debug(message["body"])
-        # logger.critical(message)spider.next_request
+        # logger.critical(message)
         self._can_get_next_message = True
         spider_next_request = getattr(self.__spider, "next_request", None)
         if callable(spider_next_request):
