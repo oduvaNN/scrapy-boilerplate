@@ -9,9 +9,7 @@ class HttpbinSpider(scrapy.Spider):
         scrapy.Spider.__init__(self, *args, **kwargs)
 
     async def start(self):
-        yield scrapy.Request(
-            "https://httpbin.org/ip", callback=self.check_ip, dont_filter=True
-        )
+        yield scrapy.Request("https://httpbin.org/ip", callback=self.check_ip, dont_filter=True)
 
     def start_requests(self):
         return self.start()

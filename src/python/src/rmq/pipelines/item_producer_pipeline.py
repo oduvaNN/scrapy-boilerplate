@@ -47,15 +47,11 @@ class ItemProducerPipeline:
     def spider_opened(self, spider):
         """Check spider for correct declared callbacks/errbacks/methods/variables"""
         if self._validate_spider_has_attributes() is False:
-            raise CloseSpider(
-                "Attached spider has no configured task_queue_name and processing_tasks observer"
-            )
+            raise CloseSpider("Attached spider has no configured task_queue_name and processing_tasks observer")
 
         """Configure loggers"""
         logger.setLevel(self.spider.settings.get("LOG_LEVEL", "INFO"))
-        logging.getLogger("pika").setLevel(
-            self.spider.settings.get("PIKA_LOG_LEVEL", "WARNING")
-        )
+        logging.getLogger("pika").setLevel(self.spider.settings.get("PIKA_LOG_LEVEL", "WARNING"))
 
         """Declare/retrieve queue name from spider instance"""
         result_queue_name = spider.result_queue_name
@@ -82,22 +78,13 @@ class ItemProducerPipeline:
             while len(self.pending_items_buffer) and self._can_interact:
                 self.send_message(self.pending_items_buffer.pop(0))
             if isinstance(self.rmq_connection.connection, pika.SelectConnection):
-                self.rmq_connection.connection.ioloop.add_callback_threadsafe(
-                    self.rmq_connection.stop
-                )
+                self.rmq_connection.connection.ioloop.add_callback_threadsafe(self.rmq_connection.stop)
 
     def _validate_spider_has_attributes(self):
-        spider_attributes = [
-            attr
-            for attr in dir(self.spider)
-            if not callable(getattr(self.spider, attr))
-        ]
+        spider_attributes = [attr for attr in dir(self.spider) if not callable(getattr(self.spider, attr))]
         if "result_queue_name" not in spider_attributes:
             return False
-        if (
-            not isinstance(self.spider.result_queue_name, str)
-            or len(self.spider.result_queue_name) == 0
-        ):
+        if not isinstance(self.spider.result_queue_name, str) or len(self.spider.result_queue_name) == 0:
             return False
         return True
 

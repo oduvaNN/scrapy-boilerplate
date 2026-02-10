@@ -168,9 +168,7 @@ class Consumer(ScrapyCommand):
             self.on_message_processed,
             ack_callback=ack_cb,
             nack_callback=nack_cb,
-        ).addErrback(
-            self.on_message_process_failure, nack_callback=nack_cb
-        ).addBoth(self._check_mode)
+        ).addErrback(self.on_message_process_failure, nack_callback=nack_cb).addBoth(self._check_mode)
 
         self._can_get_next_message = True
 
