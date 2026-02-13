@@ -8,19 +8,7 @@ from typing import Dict
 from dotenv import load_dotenv
 from scrapy.utils.log import configure_logging
 
-
-def strtobool(val: str) -> bool:
-    """Convert a string representation of truth to True or False.
-    True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values
-    are 'n', 'no', 'f', 'false', 'off', and '0'.
-    """
-    val = val.lower()
-    if val in ("y", "yes", "t", "true", "on", "1"):
-        return True
-    elif val in ("n", "no", "f", "false", "off", "0"):
-        return False
-    else:
-        raise ValueError(f"invalid truth value {val!r}")
+from utils.strtobool import strtobool
 
 
 load_dotenv()
@@ -35,8 +23,10 @@ PROXY = os.getenv("PROXY", "")
 PROXY_AUTH = os.getenv("PROXY_AUTH", "")
 PROXY_ENABLED = strtobool(os.getenv("PROXY_ENABLED", "False"))
 
-USER_AGENT_RELEASE_DATE = '2021-11-01'
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36"
+USER_AGENT_RELEASE_DATE = "2021-11-01"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36"
+)
 
 CONCURRENT_REQUESTS = int(os.getenv("CONCURRENT_REQUESTS", "16"))
 CONCURRENT_REQUESTS_PER_DOMAIN = int(os.getenv("CONCURRENT_REQUESTS_PER_DOMAIN", "8"))
@@ -84,9 +74,7 @@ try:
 except ValueError:
     HTTPCACHE_ENABLED = False
 
-HTTPCACHE_IGNORE_HTTP_CODES = list(
-    map(int, (s for s in os.getenv("HTTPCACHE_IGNORE_HTTP_CODES", "").split(",") if s))
-)
+HTTPCACHE_IGNORE_HTTP_CODES = list(map(int, (s for s in os.getenv("HTTPCACHE_IGNORE_HTTP_CODES", "").split(",") if s)))
 
 EXTENSIONS = {}
 
@@ -103,10 +91,7 @@ if IS_SENTRY_ENABLED:
     EXTENSIONS["scrapy_sentry_sdk.extensions.SentryLogging"] = 1
 
 configure_logging()
-if (
-    datetime.strptime(USER_AGENT_RELEASE_DATE, "%Y-%m-%d") + timedelta(days=180)
-    < datetime.now()
-):
+if datetime.strptime(USER_AGENT_RELEASE_DATE, "%Y-%m-%d") + timedelta(days=180) < datetime.now():
     logging.warning("USER_AGENT is outdated")
 
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
