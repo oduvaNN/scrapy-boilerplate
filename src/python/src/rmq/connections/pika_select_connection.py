@@ -39,7 +39,9 @@ class PikaSelectConnection:
         self.queue_name = queue_name
 
         # additional options
-        self.options = options if options is not None and isinstance(options, dict) else self._DEFAULT_OPTIONS
+        self.options = (
+            options if options is not None and isinstance(options, dict) else self._DEFAULT_OPTIONS
+        )
 
         # is current connection should start consuming on ioloop run state
         self.is_consumer = is_consumer
@@ -138,7 +140,9 @@ class PikaSelectConnection:
 
     @log_current_thread
     def reconnect(self, reason):
-        logger.warning(f"Connection open failed, reopening in {self._RECONNECT_TIMEOUT} seconds: {reason}")
+        logger.warning(
+            f"Connection open failed, reopening in {self._RECONNECT_TIMEOUT} seconds: {reason}"
+        )
         self.connection.ioloop.call_later(self._RECONNECT_TIMEOUT, self.connection.ioloop.stop)
 
     def on_connection_closed(self, _unused_connection, reason):
@@ -162,7 +166,9 @@ class PikaSelectConnection:
         logger.info("Channel opened")
         self._channel = channel
         self._channel.add_on_close_callback(self.on_channel_closed)
-        self._channel.add_callback(self.on_basic_get_empty, [pika.spec.Basic.GetEmpty], one_shot=False)
+        self._channel.add_callback(
+            self.on_basic_get_empty, [pika.spec.Basic.GetEmpty], one_shot=False
+        )
         self.__ignore_ack_after = None
         self.setup_queue(self.queue_name)
 
@@ -180,7 +186,9 @@ class PikaSelectConnection:
         """If queue require some specific properties at declaration subclass of this class should be created and
         this method should be overridden"""
         logger.info("Declaring queue {}".format(queue_name))
-        self._channel.queue_declare(queue=queue_name, callback=self.on_queue_declare_ok, durable=True)
+        self._channel.queue_declare(
+            queue=queue_name, callback=self.on_queue_declare_ok, durable=True
+        )
 
     def on_queue_declare_ok(self, _unused_frame):
         logger.info("Queue declared")
@@ -188,15 +196,15 @@ class PikaSelectConnection:
 
     def set_qos(self):
         self._channel.basic_qos(
-            prefetch_count=self.options["prefetch_count"] or self._DEFAULT_OPTIONS["prefetch_count"],
+            prefetch_count=self.options["prefetch_count"]
+            or self._DEFAULT_OPTIONS["prefetch_count"],
             callback=self.start_interacting,
         )
 
     def start_interacting(self, _unused_frame):
         logger.info("Issuing consumer related RPC commands")
         if self.options.get(
-            "enable_delivery_confirmations",
-            self._DEFAULT_OPTIONS["enable_delivery_confirmations"],
+            "enable_delivery_confirmations", self._DEFAULT_OPTIONS["enable_delivery_confirmations"]
         ):
             self.enable_delivery_confirmations()
         self.can_interact = True
@@ -209,12 +217,18 @@ class PikaSelectConnection:
 
     def on_consumer_cancelled(self, method_frame):
         logger.info("Consumer was cancelled remotely, reopen consumer: {}".format(method_frame))
-        if self.is_consumer and method_frame.channel_number == self._channel.channel_number and self._channel.is_open:
+        if (
+            self.is_consumer
+            and method_frame.channel_number == self._channel.channel_number
+            and self._channel.is_open
+        ):
             cb = functools.partial(self.setup_queue, queue_name=self.queue_name)
             self.connection.ioloop.call_later(self._EMPTY_QUEUE_DELAY, cb)
         else:
             if self.connection.is_open:
-                self.connection.ioloop.call_later(self._EMPTY_QUEUE_DELAY, functools.partial(self.open_channel))
+                self.connection.ioloop.call_later(
+                    self._EMPTY_QUEUE_DELAY, functools.partial(self.open_channel)
+                )
             else:
                 # Note: skipping ack/nack for all events after channel closed event received. Schedule graceful
                 # shutdown of spider. Restart spider must be handled externally (pm2/docker swarm)
@@ -232,7 +246,9 @@ class PikaSelectConnection:
 
     def on_cancel_ok(self, _unused_frame, consumer_tag):
         if consumer_tag:
-            logger.info("RabbitMQ acknowledged the cancellation of the consumer: {}".format(consumer_tag))
+            logger.info(
+                "RabbitMQ acknowledged the cancellation of the consumer: {}".format(consumer_tag)
+            )
         self._consuming = False
         self.stop()
 
@@ -242,7 +258,11 @@ class PikaSelectConnection:
 
     def on_delivery_confirmation(self, method_frame):
         confirmation_type = method_frame.method.NAME.split(".")[1].lower()
-        logger.debug("Received {} for delivery tag: {}".format(confirmation_type, method_frame.method.delivery_tag))
+        logger.debug(
+            "Received {} for delivery tag: {}".format(
+                confirmation_type, method_frame.method.delivery_tag
+            )
+        )
         if confirmation_type == "ack":
             self._acked += 1
         elif confirmation_type == "nack":
@@ -257,7 +277,9 @@ class PikaSelectConnection:
     def get_ready_messages_count(self, queue_name=None, callback=None):
         if queue_name is None:
             queue_name = self.queue_name
-        cb = functools.partial(self._exec_get_ready_messages_count_issuer_callback, callback=callback)
+        cb = functools.partial(
+            self._exec_get_ready_messages_count_issuer_callback, callback=callback
+        )
         self._channel.queue_declare(queue=queue_name, callback=cb, durable=True, passive=True)
 
     def _exec_get_ready_messages_count_issuer_callback(self, frame, callback):
@@ -266,10 +288,7 @@ class PikaSelectConnection:
             callback(message_count=message_count)
 
     def publish_message(
-        self,
-        message,
-        queue_name: str | None = None,
-        properties: pika.BasicProperties = None,
+        self, message, queue_name: str = None, properties: pika.BasicProperties = None
     ):
         if self._channel is None or not self._channel.is_open:
             return
@@ -313,7 +332,9 @@ class PikaSelectConnection:
         self.__owner_call_on_basic_get_msg_handler(msg_object)
 
     def on_basic_get_empty(self, _method):
-        logger.debug("empty queue allow try again consuming in {} seconds".format(self._EMPTY_QUEUE_DELAY))
+        logger.debug(
+            "empty queue allow try again consuming in {} seconds".format(self._EMPTY_QUEUE_DELAY)
+        )
         self.connection.ioloop.call_later(self._EMPTY_QUEUE_DELAY, self.bubble_on_basic_get_empty)
 
     def bubble_on_basic_get_empty(self):
@@ -333,7 +354,8 @@ class PikaSelectConnection:
     def acknowledge_message(self, delivery_tag):
         if self.__ignore_ack_after:
             logger.info(
-                f"Skip acknowledgement. Reason: ignore ack after is set. Ignore ts:{self.__ignore_ack_after} ms"
+                f"Skip acknowledgement. Reason: ignore ack after is set. "
+                f"Ignore ts:{self.__ignore_ack_after} ms"
             )
             return
 
@@ -343,7 +365,8 @@ class PikaSelectConnection:
     def negative_acknowledge_message(self, delivery_tag):
         if self.__ignore_ack_after:
             logger.info(
-                f"Skip acknowledgement. Reason: ignore nack after is set. Ignore ts:{self.__ignore_ack_after} ms"
+                f"Skip acknowledgement. Reason: ignore nack after is set. "
+                f"Ignore ts:{self.__ignore_ack_after} ms"
             )
             return
         if self._channel is not None and self._channel.is_open:
@@ -351,7 +374,10 @@ class PikaSelectConnection:
 
     @log_current_thread
     def run(self):
-        while self._current_connect_attempts_count < self._MAX_CONNECT_ATTEMPTS and not self._stopping:
+        while (
+            self._current_connect_attempts_count < self._MAX_CONNECT_ATTEMPTS
+            and not self._stopping
+        ):
             self.connection = None
             self._deliveries = []
             self._acked = 0
@@ -368,10 +394,11 @@ class PikaSelectConnection:
                 self.shutdown_event_handler = None
             if reactor.running:
                 cb = functools.partial(
-                    self.connection.ioloop.add_callback_threadsafe,
-                    self.stop_from_reactor_event,
+                    self.connection.ioloop.add_callback_threadsafe, self.stop_from_reactor_event
                 )
-                self.shutdown_event_handler = reactor.addSystemEventTrigger("before", "shutdown", cb)
+                self.shutdown_event_handler = reactor.addSystemEventTrigger(
+                    "before", "shutdown", cb
+                )
 
             self.connection.ioloop.start()
         logger.info("Stopped")
@@ -385,8 +412,7 @@ class PikaSelectConnection:
             self._current_graceful_stop_attempts_count += 1
             if self._current_graceful_stop_attempts_count < self._MAX_GRACEFUL_STOP_ATTEMPTS:
                 self.connection.ioloop.call_later(
-                    self._CHECK_DELIVERY_CONFIRMATION_DELAY,
-                    self.stop_from_reactor_event,
+                    self._CHECK_DELIVERY_CONFIRMATION_DELAY, self.stop_from_reactor_event
                 )
             else:
                 self.stop()

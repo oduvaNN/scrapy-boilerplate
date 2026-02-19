@@ -17,11 +17,7 @@ class MetaDescriptionItem(RMQItem):
 class SingleInheritor(TaskBaseSpider):
     name = "single_inheritor_example"
 
-    custom_settings = {
-        "ITEM_PIPELINES": {
-            get_import_full_name(ItemProducerPipeline): 310,
-        }
-    }
+    custom_settings = {"ITEM_PIPELINES": {get_import_full_name(ItemProducerPipeline): 310,}}
 
     def __init__(self, *args, **kwargs):
         super(SingleInheritor, self).__init__(*args, **kwargs)

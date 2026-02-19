@@ -155,13 +155,13 @@ class Producer(ScrapyCommand):
             ),
             heartbeat=RMQDefaultOptions.CONNECTION_HEARTBEAT.value,
         )
-        reactor.callInThread(self.connect, parameters, self.task_queue_name)  # type: ignore[attr-defined]
-        reactor.callLater(self.check_interact_ready_delay, self.produce_tasks)  # type: ignore[attr-defined]
+        reactor.callInThread(self.connect, parameters, self.task_queue_name)
+        reactor.callLater(self.check_interact_ready_delay, self.produce_tasks)
 
     def produce_tasks(self, is_message_count_validated=False):
         if self._can_interact is False:
             """Wait until connection is ready to interaction"""
-            reactor.callLater(self.check_interact_ready_delay, self.produce_tasks)  # type: ignore[attr-defined]
+            reactor.callLater(self.check_interact_ready_delay, self.produce_tasks)
             return
 
         """check current queue ready messages count (queue size)"""
@@ -169,7 +169,7 @@ class Producer(ScrapyCommand):
             cb = functools.partial(
                 self.rmq_connection.get_ready_messages_count,
                 self.task_queue_name,
-                functools.partial(reactor.callFromThread, self.validate_queue_message_count),  # type: ignore[attr-defined]
+                functools.partial(reactor.callFromThread, self.validate_queue_message_count),
             )
             self.rmq_connection.connection.ioloop.add_callback_threadsafe(cb)
             return
@@ -180,7 +180,7 @@ class Producer(ScrapyCommand):
 
     def validate_queue_message_count(self, message_count=None):
         delay_timeout = self._delay(message_count)
-        reactor.callLater(delay_timeout, self.produce_tasks, True)  # type: ignore[attr-defined]
+        reactor.callLater(delay_timeout, self.produce_tasks, True)
 
     def _delay(self, current_count=None) -> int:
         if current_count is None:
@@ -217,7 +217,9 @@ class Producer(ScrapyCommand):
             reactor.callLater(0, self.crawler_process._graceful_stop_reactor)
         if failure.check(OperationalError):
             if "1065" in failure.getErrorMessage():
-                self.logger.error("Got empty query to DB. Incorrect implementation. Shutting down...")
+                self.logger.error(
+                    "Got empty query to DB. Incorrect implementation. Shutting down..."
+                )
                 reactor.callLater(0, self.crawler_process._graceful_stop_reactor)
         failure.trap(Exception)
 
@@ -262,7 +264,7 @@ class Producer(ScrapyCommand):
             self.logger.info(f"DB is empty. waiting for {delay} seconds...")
             reactor.callLater(delay, self.produce_tasks, True)
             return
-        if self.chunk_size == 1 and not isinstance(rows, list) and not isinstance(rows, tuple):
+        if self.chunk_size == 1 and not isinstance(rows, list):
             rows = [rows]
         deferred_interactions = []
         for row in rows:
@@ -277,9 +279,9 @@ class Producer(ScrapyCommand):
 
     def _on_task_update_completed(self, _result=None):
         if self.mode == Producer.CommandModes.ACTION.value:
-            reactor.callLater(0, self.crawler_process._graceful_stop_reactor)  # type: ignore[attr-defined]
+            reactor.callLater(0, self.crawler_process._graceful_stop_reactor)
         elif self.mode == Producer.CommandModes.WORKER.value:
-            reactor.callLater(0, self.produce_tasks)  # type: ignore[attr-defined]
+            reactor.callLater(0, self.produce_tasks)
 
     def _on_task_update_error(self, failure):
         self.logger.error("failure: {}".format(failure))
@@ -321,15 +323,12 @@ class Producer(ScrapyCommand):
             parameters,
             queue_name,
             owner=self,
-            options={
-                "enable_delivery_confirmations": True,
-                "prefetch_count": 1,
-            },
+            options={"enable_delivery_confirmations": True, "prefetch_count": 1, },
             is_consumer=False,
         )
         c.run()
 
     def run(self, args: list[str], opts: Namespace):
         self.set_logger(self.__class__.__name__, self.project_settings.get("LOG_LEVEL"))
-        reactor.callLater(0, self.execute, args, opts)  # type: ignore[attr-defined]
-        reactor.run()  # type: ignore[attr-defined]
+        reactor.callLater(0, self.execute, args, opts)
+        reactor.run()
